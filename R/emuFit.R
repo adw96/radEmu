@@ -80,7 +80,10 @@
 #' small p-values and are not thought to have scientifically interesting signals. We recommend removing them before analyzing data further. 
 #' If TRUE, all zero-comparison parameter p-values will be set to NA. If FALSE no zero-comparison parameter p-values will be set to NA.
 #' If a value between 0 and 1, all zero-comparison p-values below the value will be set to NA. 
-#' Default is \code{0.01}. 
+#' Default is \code{0.01}.
+#' @param estimates_only logical: return parameter estimates only? If \code{TRUE}, confidence intervals
+#' and score tests are not computed (overriding \code{compute_cis} and \code{run_score_tests}), and
+#' \code{test_kj} is not required. Default is \code{FALSE}.
 #' @param control A list of control parameters, to have more control over estimation and hypothesis testing. See \code{control_fn} for details.
 #' @param ... Additional arguments. Arguments matching the names of \code{control_fn()} options are forwarded to that function and override
 #' defaults. Unknown arguments are ignored with a warning.
@@ -163,6 +166,7 @@ emuFit <- function(Y,
                    null_window = 5,
                    null_diagnostic_plots = FALSE, 
                    remove_zero_comparison_pvals = 0.01,
+                   estimates_only = FALSE,
                    control = NULL,
                    ...) {
   
@@ -190,7 +194,16 @@ emuFit <- function(Y,
   } else {
     control <- control_fn(utils::modifyList(control, control_dots))
   }
-  
+
+  if (estimates_only) {
+    if ((!missing(run_score_tests) && run_score_tests) |
+        (!missing(compute_cis) && compute_cis)) {
+      warning("`estimates_only = TRUE`: confidence intervals and score tests will not be computed.")
+    }
+    compute_cis <- FALSE
+    run_score_tests <- FALSE
+  }
+
   # run checks on arguments in function emuFit_check
   check_results <- emuFit_check(Y = Y,
                                 X = X,
@@ -229,8 +242,13 @@ emuFit <- function(Y,
   # check for zero-comparison parameters
   zero_comparison_res <- zero_comparison_check(X = X, Y = Y)
   
-  X_cup <- X_cup_from_X_fast(X,J)
-  
+  # expanded design matrix, needed for confidence intervals and score tests
+  # (emuFit_micro_penalized constructs it when needed for estimation)
+  X_cup <- NULL
+  if (compute_cis | run_score_tests) {
+    X_cup <- X_cup_from_X_fast(X,J)
+  }
+
   #choose ref taxon for fitting constrained models / performing wald and score tests
   j_ref <- get_j_ref(Y)
   
@@ -305,9 +323,19 @@ emuFit <- function(Y,
     } else {
       fitted_B <- B
       if (penalize) {
-        G <- get_G_for_augmentations_fast(X, J, n, X_cup)
-        Y_test <- Y_augmented <- Y + 
-          get_augmentations(X = X, G = G, Y = Y, B = fitted_B)
+        groups <- discrete_groups(X)
+        if (nrow(groups$distinct_X) == p) {
+          # discrete design: augmentations in closed form
+          Y_test <- Y_augmented <- Y +
+            get_augmentations_discrete(X = X, Y = Y, B = fitted_B, groups = groups)
+        } else {
+          if (is.null(X_cup)) {
+            X_cup <- X_cup_from_X_fast(X,J)
+          }
+          G <- get_G_for_augmentations_fast(X, J, n, X_cup)
+          Y_test <- Y_augmented <- Y +
+            get_augmentations(X = X, G = G, Y = Y, B = fitted_B)
+        }
       } else {
         Y_augmented <- NULL
         Y_test <- Y
@@ -677,12 +705,7 @@ emuFit <- function(Y,
   
   if (!is.null(colnames(X))) {
     if (length(unique(colnames(X))) == ncol(X)) {
-      k_to_covariates <- data.frame(k = 1:p,
-                                    covariate = colnames(X))
-      
-      coefficients$covariate <- do.call(c,
-                                        lapply(  coefficients$k,
-                                                 function(d) k_to_covariates$covariate[k_to_covariates$k ==d]))
+      coefficients$covariate <- colnames(X)[coefficients$k]
     } else {
       coefficients$covariate <- NA
     }
@@ -691,13 +714,7 @@ emuFit <- function(Y,
   }
   
   if (!is.null(colnames(Y))) {
-    j_to_categories <- data.frame(j = 1:J,
-                                  category = colnames(Y))
-    coefficients$category <- do.call(c,
-                                     lapply(coefficients$j,
-                                            function(d) j_to_categories$category[
-                                              j_to_categories$j ==d
-                                            ]))
+    coefficients$category <- colnames(Y)[coefficients$j]
   } else {
     coefficients$category <- NA
   }

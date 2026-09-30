@@ -1,3 +1,13 @@
+# radEmu (development version)
+
+This release speeds up estimation for designs with only discrete covariates. Initial code was developed with assistance from Claude, although final code and responsibility remain with the package owners.
+
+## Changes
+
+* For designs with only discrete covariates (design matrices with exactly `p` distinct rows), the Firth-penalized estimate is now computed in closed form rather than iteratively. It equals the unpenalized estimate computed from covariate-pattern-by-category totals of `Y` with 1/2 added to each total. Data augmentations are also computed in closed form. Results agree with the previous iterative algorithm to within its convergence tolerance. The iterative algorithm remains available via `emuFit_micro_penalized(use_discrete = FALSE)`.
+* New argument `estimates_only` in `emuFit()` returns parameter estimates without confidence intervals or score tests. The expanded design matrix is now constructed only when confidence intervals or score tests are requested.
+* Covariate and category labels in the `coef` table are now computed in time linear in the number of categories (previously quadratic).
+
 # radEmu 2.3.0.0
 
 This is a minor release that updates the algorithms to estimate parameters under the alternate and null hypotheses for designs with only discrete covariates. These new algorithms are faster and more stable in most cases. Initial code was developed with assistance from ChatGPT, although final code and responsibility remain with the package owners.
