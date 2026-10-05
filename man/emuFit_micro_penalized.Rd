@@ -58,8 +58,7 @@ Y_j_ref greater than zero).}
 
 \item{use_discrete}{logical: if the design matrix is discrete (it has exactly p distinct
 rows), compute the penalized estimate and data augmentations in closed form rather than
-iteratively. The penalized estimate is then the unpenalized estimate computed from
-covariate-pattern-by-category totals of Y, with 1/2 added to each total. Default is TRUE.}
+iteratively. Default is TRUE.}
 }
 \value{
 A p x J matrix containing regression coefficients (under constraint
