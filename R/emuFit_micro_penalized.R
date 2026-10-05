@@ -25,8 +25,7 @@
 #' Y_j_ref greater than zero).
 #' @param use_discrete logical: if the design matrix is discrete (it has exactly p distinct
 #' rows), compute the penalized estimate and data augmentations in closed form rather than
-#' iteratively. The penalized estimate is then the unpenalized estimate computed from
-#' covariate-pattern-by-category totals of Y, with 1/2 added to each total. Default is TRUE.
+#' iteratively. Default is TRUE.
 #'
 #' @return A p x J matrix containing regression coefficients (under constraint
 #' g(B_k) = 0)
@@ -61,10 +60,13 @@ emuFit_micro_penalized <-
 
     #for discrete designs, the penalized estimate is available in closed form:
     #the unpenalized discrete estimate from covariate-pattern-by-category totals
-    #with 1/2 added to each total. It is the limit of the iterations below.
+    #with 1/2 added to each total. 
     groups <- discrete_groups(X)
+    
     if (use_discrete & nrow(groups$distinct_X) == p) {
+      
       if (qr(groups$distinct_X)$rank < p) {
+        
         stop(
           "Design matrix X inputted for the model is rank-deficient, preventing proper model fitting.
   This might be due to multicollinearity, overparameterization, or redundant factor levels included in covariates.
