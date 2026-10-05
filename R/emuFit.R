@@ -194,7 +194,7 @@ emuFit <- function(Y,
   } else {
     control <- control_fn(utils::modifyList(control, control_dots))
   }
-
+  
   if (estimates_only) {
     if ((!missing(run_score_tests) && run_score_tests) |
         (!missing(compute_cis) && compute_cis)) {
@@ -203,7 +203,7 @@ emuFit <- function(Y,
     compute_cis <- FALSE
     run_score_tests <- FALSE
   }
-
+  
   # run checks on arguments in function emuFit_check
   check_results <- emuFit_check(Y = Y,
                                 X = X,
@@ -248,7 +248,7 @@ emuFit <- function(Y,
   if (compute_cis | run_score_tests) {
     X_cup <- X_cup_from_X_fast(X,J)
   }
-
+  
   #choose ref taxon for fitting constrained models / performing wald and score tests
   j_ref <- get_j_ref(Y)
   
@@ -350,25 +350,22 @@ emuFit <- function(Y,
   
   if (p == 1) {
     message("You are running an intercept-only model. In this model the intercept beta_0^j is an unidentifiable combination of intercept for category j and the detection efficiency of category j. Therefore this parameter is not interpretable.")
-    
     coefficients <- expand.grid(1:J, 1)
     coefficients <- data.frame(j = coefficients[ , 1],
                                k = coefficients[ ,2])
     coefficients$estimate <- fitted_B[1, ]
-    coefficients$lower <- NA
-    coefficients$upper <- NA
-    coefficients$pval <- coefficients$score_stat <- NA
   } else {
     coefficients <- expand.grid(1:J, 2:p)
     coefficients <- data.frame(j = coefficients[ , 1],
                                k = coefficients[ ,2])
     coefficients$estimate <- do.call(c, lapply(2:p, function(k) fitted_B[k,]))
-    coefficients$lower <- NA
-    coefficients$upper <- NA
-    coefficients$pval <- coefficients$score_stat <- NA
   }
+  coefficients$se <- NA
+  coefficients$lower <- NA
+  coefficients$upper <- NA
+  coefficients$pval <- coefficients$score_stat <- NA
   
-  if (compute_cis) {
+  if (compute_cis | return_wald_p) {
     if (verbose %in% c(TRUE, "development")) {
       message("Performing Wald tests and constructing CIs.")
     }
@@ -400,13 +397,10 @@ emuFit <- function(Y,
   }
   
   if (return_wald_p) {
-    if (!compute_cis) {
-      warning("Wald p-values cannot be returned if compute_cis = FALSE.")
-    } else {
-      coefficients$wald_p <- coefficients$pval}
+    coefficients$wald_p <- coefficients$pval
   }
   
-  coefficients$pval <- NA
+  coefficients$pval <- NA # AW: why?
   
   if (is.null(test_kj)) {
     test_kj <- coefficients
@@ -424,7 +418,7 @@ emuFit <- function(Y,
     if(control$use_both_cov){
       I_inv <- Matrix::solve(just_wald_things$I[-indexes_to_remove,-indexes_to_remove],  method = "cholmod_solve")
     } else{
-    I_inv <- NULL
+      I_inv <- NULL
     }
   }
   
@@ -481,9 +475,9 @@ emuFit <- function(Y,
           # check if symmetric or symmetric subset
           v3 <- rnorm(J)
           if (isTRUE(all.equal(constraint_fn[[k]](v3), mean(v3)))) {
-              constraint_type <- "discrete:mean"
+            constraint_type <- "discrete:mean"
           } else if (any(grepl("pseudohuber_median", deparse(body(constraint_fn[[k]]))))) {
-              constraint_type <- "discrete:pseudohuber"
+            constraint_type <- "discrete:pseudohuber"
           } else {
             constraint_type <- "other"
           }
@@ -553,14 +547,14 @@ emuFit <- function(Y,
       # using augmented lagrangian algorithm, so we don't care about constraint_type
       for (k in unique(test_kj$k)) {
         attr(constraint_fn[[k]], "constraint_type") <- "other"
-       }
+      }
     }
     
     for(test_ind in 1:nrow(test_kj)) {
       
       if (verbose %in% c(TRUE, "development")) {
         message(paste("Running score test ", test_ind, " of ", nrow(test_kj)," (row of B k = ", test_kj$k[test_ind], "; column of B j = ",
-                    test_kj$j[test_ind],").",sep = ""))
+                      test_kj$j[test_ind],").",sep = ""))
         start <- proc.time()
       }
       
@@ -696,7 +690,7 @@ emuFit <- function(Y,
           time <- paste0(hour, " hours")
         }
         message(paste("Score test ", test_ind, " of ", nrow(test_kj)," (row of B k = ", test_kj$k[test_ind], "; column of B j = ",
-                    test_kj$j[test_ind],") has completed in approximately ", time, ".",sep = ""))
+                      test_kj$j[test_ind],") has completed in approximately ", time, ".",sep = ""))
         start <- proc.time()
         
       }
@@ -719,19 +713,12 @@ emuFit <- function(Y,
     coefficients$category <- NA
   }
   
-  if (!compute_cis) {
-    coef_df <-
-          cbind(data.frame(covariate = coefficients$covariate,
-                           category = coefficients$category,
-                           category_num = coefficients$j),
-                coefficients[ , c("estimate","lower","upper")])
-  } else {
-    coef_df <-
-      cbind(data.frame(covariate = coefficients$covariate,
-                       category = coefficients$category,
-                       category_num = coefficients$j),
-            coefficients[ , c("estimate","se", "lower","upper")])
-  }
+  coef_df <-
+    cbind(data.frame(covariate = coefficients$covariate,
+                     category = coefficients$category,
+                     category_num = coefficients$j),
+          coefficients[ , c("estimate","se", "lower","upper")])
+  
   if (control$use_both_cov) {
     coef_df <- cbind(coef_df, coefficients[ , c("score_stat","pval","score_fullcov_p")])
   } else {
